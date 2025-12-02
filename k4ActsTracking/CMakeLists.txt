@@ -35,7 +35,11 @@ install(TARGETS k4ActsTracking
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT shlib
 )
 
-file(GLOB _plugin_sources src/components/*.cpp)
+set(_plugin_sources
+  src/components/ActsGeoSvc.cpp
+  src/components/ActsGeoGen3Svc.cpp
+)
+
 set(ACTS_PLUGIN_TARGETS "Acts::Core;Acts::PluginDD4hep")
 if (Acts_VERSION VERSION_LESS 43.0.0)
   set(ACTS_PLUGIN_TARGETS "ActsCore;ActsPluginDD4hep")
