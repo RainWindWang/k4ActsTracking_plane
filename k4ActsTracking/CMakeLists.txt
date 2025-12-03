@@ -38,6 +38,7 @@ install(TARGETS k4ActsTracking
 set(_plugin_sources
   src/components/ActsGeoSvc.cpp
   src/components/ActsGeoGen3Svc.cpp
+  src/components/ActsTestPropagator.cpp
 )
 
 set(ACTS_PLUGIN_TARGETS "Acts::Core;Acts::PluginDD4hep")
