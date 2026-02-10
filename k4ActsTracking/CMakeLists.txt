@@ -40,6 +40,8 @@ set(_plugin_sources
   src/components/ActsGeoGen3Svc.cpp
   src/components/ActsTestPropagator.cpp
   src/components/ActsGeoGen3PlaneSvc.cpp
+  src/components/TrackerMappingSvc.cpp
+  src/components/DumpSimTrackerHitCellIDAlg.cpp
 )
 
 set(ACTS_PLUGIN_TARGETS "Acts::Core;Acts::PluginDD4hep")
