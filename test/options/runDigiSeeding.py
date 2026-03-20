@@ -11,6 +11,7 @@ from Configurables import (
     DigiAlg,
     TrackerEDMToActsAlg,
     SeedingAlg,
+    SeedingTool,
 )
 
 from k4FWCore import ApplicationMgr, IOSvc
@@ -91,12 +92,24 @@ edm2acts.OutputLevel = DEBUG
 # Seeding
 # ------------------------------------------------------------------
 
+seedTool = SeedingTool("SeedingTool")
+seedTool.OutputLevel = DEBUG
+seedTool.enableStraightLineCut = True
+seedTool.maxCollinearity = 0.01
+
 seeding = SeedingAlg("SeedingAlg")
 seeding.InputSpacePoints = "TrackerSpacePoints"
 seeding.OutputSeeds = "TrackerSeeds"
-seeding.SeedingTool = "SeedingTool"
+seeding.SeedingTool = seedTool
 seeding.Verbose = True
 seeding.OutputLevel = DEBUG
+
+#seeding = SeedingAlg("SeedingAlg")
+#seeding.InputSpacePoints = "TrackerSpacePoints"
+#seeding.OutputSeeds = "TrackerSeeds"
+#seeding.SeedingTool = "SeedingTool"
+#seeding.Verbose = True
+#seeding.OutputLevel = DEBUG
 
 ApplicationMgr(
     TopAlg=[digi,edm2acts,seeding,],
