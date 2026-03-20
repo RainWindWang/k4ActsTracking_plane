@@ -27,7 +27,7 @@ mappingSvc.OutputLevel = DEBUG
 
 # I/O service
 iosvc = IOSvc()
-iosvc.Input = "positrons_1_edm4hep.root"
+iosvc.Input = "positrons_tracker_edm4hep.root"
 iosvc.OutputLevel = DEBUG
 
 #--------------

@@ -43,6 +43,16 @@ set(_plugin_sources
   src/components/TrackerMappingSvc.cpp
   src/components/DumpSimTrackerHitCellIDAlg.cpp
   src/components/PropagateToHitSurfaceAlg.cpp
+
+  src/components/DigitizationSvc.cpp
+  src/components/TrackerDigitizerTool.cpp
+  src/components/DigiAlg.cpp
+
+  src/components/TrackerEDMConverterTool.cpp
+  src/components/TrackerEDMToActsAlg.cpp
+
+  src/components/SeedingAlg.cpp
+  src/components/SeedingTool.cpp
 )
 
 set(ACTS_PLUGIN_TARGETS "Acts::Core;Acts::PluginDD4hep")
@@ -55,6 +65,7 @@ gaudi_add_module(k4ActsTrackingPlugins
   LINK
   Gaudi::GaudiKernel
   k4FWCore::k4FWCore
+  EDM4HEP::edm4hep
   DD4hep::DDCore DD4hep::DDRec
   k4ActsTracking
   ${ACTS_PLUGIN_TARGETS}
