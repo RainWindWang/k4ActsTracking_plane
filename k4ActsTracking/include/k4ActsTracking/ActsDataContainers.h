@@ -3,10 +3,14 @@
 #include "k4ActsTracking/DigitizationTypes.h"
 
 #include <Acts/Definitions/Algebra.hpp>
+#include <Acts/EventData/SeedContainer2.hpp>
+#include <Acts/EventData/SpacePointContainer2.hpp>
+#include <Acts/EventData/TrackParameters.hpp>
 #include <Acts/Geometry/GeometryIdentifier.hpp>
 #include <Acts/Surfaces/Surface.hpp>
 
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace k4ActsTracking {
@@ -21,24 +25,20 @@ struct TrackerMeasurement2D {
 
 using MeasurementCollection = std::vector<TrackerMeasurement2D>;
 
-class MeasurementProvider {
-public:
-  MeasurementProvider() = default;
+using SpacePointContainer = Acts::SpacePointContainer2;
+using SeedContainer = Acts::SeedContainer2;
 
-  explicit MeasurementProvider(MeasurementCollection m)
-      : m_meas(std::move(m)) {}
+using InitialTrackParametersCollection =
+    std::vector<Acts::BoundTrackParameters>;
 
-  const TrackerMeasurement2D* find(std::uint32_t hitIndex) const {
-    for (const auto& mm : m_meas) {
-      if (mm.hitIndex == hitIndex) return &mm;
-    }
-    return nullptr;
-  }
+using ProtoTrack = std::vector<std::uint32_t>;
+using ProtoTrackCollection = std::vector<ProtoTrack>;
 
-  const MeasurementCollection& measurements() const { return m_meas; }
+using ActsTrackContainer = Acts::VectorTrackContainer;
+using ActsTrackStateContainer = Acts::VectorMultiTrajectory;
 
-private:
-  MeasurementCollection m_meas;
-};
+using ActsTrackContainerPtr = std::shared_ptr<ActsTrackContainer>;
+using ActsTrackStateContainerPtr =
+    std::shared_ptr<ActsTrackStateContainer>;
 
 }  // namespace k4ActsTracking

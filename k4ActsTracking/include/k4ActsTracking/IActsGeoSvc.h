@@ -25,6 +25,10 @@
 #include <memory>
 #include <unordered_map>
 
+#include <Acts/Geometry/GeometryContext.hpp>
+#include <Acts/MagneticField/MagneticFieldContext.hpp>
+#include <Acts/Calibration/CalibrationContext.hpp>
+
 namespace dd4hep {
   namespace rec {
     class Surface;
@@ -46,6 +50,10 @@ public:
 
   virtual std::shared_ptr<const Acts::TrackingGeometry>      trackingGeometry() const = 0;
   virtual std::shared_ptr<const Acts::MagneticFieldProvider> magneticField() const    = 0;
+
+  virtual const Acts::GeometryContext& geometryContext() const = 0;
+  virtual const Acts::MagneticFieldContext& magneticFieldContext() const = 0;
+  virtual const Acts::CalibrationContext& calibrationContext() const = 0;
 
   virtual ~IActsGeoSvc() = default;
 };
