@@ -8,6 +8,8 @@
 #include <Acts/EventData/TrackParameters.hpp>
 #include <Acts/Geometry/GeometryIdentifier.hpp>
 #include <Acts/Surfaces/Surface.hpp>
+#include <Acts/TrackFitting/TrackContainer.hpp>
+#include <Acts/EventData/MultiTrajectory.hpp>
 
 #include <cstdint>
 #include <memory>
@@ -26,6 +28,8 @@ struct TrackerMeasurement2D {
 using MeasurementCollection = std::vector<TrackerMeasurement2D>;
 
 using SpacePointContainer = Acts::SpacePointContainer2;
+using SpacePointCollection = SpacePointContainer;
+
 using SeedContainer = Acts::SeedContainer2;
 
 using InitialTrackParametersCollection =

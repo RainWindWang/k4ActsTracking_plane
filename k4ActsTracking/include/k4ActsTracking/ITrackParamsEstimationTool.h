@@ -4,16 +4,17 @@
 
 #include <GaudiKernel/IAlgTool.h>
 
+#include <optional>
+
 class ITrackParamsEstimationTool : virtual public IAlgTool {
 public:
   DeclareInterfaceID(ITrackParamsEstimationTool, 1, 0);
 
   /// Estimate initial parameters for ONE seed
-  virtual StatusCode estimateOneSeed(
+  virtual std::optional<Acts::BoundTrackParameters> estimateOneSeed(
       const k4ActsTracking::SpacePointContainer& spacePoints,
       const Acts::SeedContainer2::ConstProxy& seed,
-      const k4ActsTracking::MeasurementCollection& measurements,
-      Acts::BoundTrackParameters& outParams) const = 0;
+      const k4ActsTracking::MeasurementCollection& measurements) const = 0;
 
   ~ITrackParamsEstimationTool() override = default;
 };

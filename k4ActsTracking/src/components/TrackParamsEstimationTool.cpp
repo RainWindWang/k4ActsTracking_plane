@@ -83,7 +83,6 @@ StatusCode TrackParamsEstimationTool::initialize() {
 }
 
 Acts::ParticleHypothesis TrackParamsEstimationTool::particleHypothesis() const {
-  // electron mass hypothesis with positive q/p sign
   if (m_particleHypothesis == "electron") {
     return Acts::ParticleHypothesis::electron();
   }
@@ -98,6 +97,8 @@ TrackParamsEstimationTool::estimateOneSeed(
     const k4ActsTracking::SpacePointContainer& spacePoints,
     const Acts::SeedContainer2::ConstProxy& seed,
     const k4ActsTracking::MeasurementCollection& measurements) const {
+
+  const auto& gctx = m_geoSvc->geometryContext();
 
   const auto idx = seed.spacePointIndices();
 
@@ -131,30 +132,30 @@ TrackParamsEstimationTool::estimateOneSeed(
     return std::nullopt;
   }
 
-  auto local = meas->surface->globalToLocal(Acts::GeometryContext{}, p0, dir);
+  auto local = meas->surface->globalToLocal(gctx, p0, dir);
   if (!local.ok()) {
     return std::nullopt;
   }
 
   const double theta = std::acos(std::clamp(dir.z(), -1.0, 1.0));
-  const double phi = std::atan2(dir.y(), dir.x());
+  const double phi   = std::atan2(dir.y(), dir.x());
 
   const double qop =
       static_cast<double>(m_charge) /
       (m_assumedMomentumGeV * Acts::UnitConstants::GeV);
 
   Acts::BoundVector pars = Acts::BoundVector::Zero();
-  pars[Acts::eBoundLoc0] = (*local)[0];
-  pars[Acts::eBoundLoc1] = (*local)[1];
+  pars[Acts::eBoundLoc0]   = (*local)[0];
+  pars[Acts::eBoundLoc1]   = (*local)[1];
   pars[Acts::eBoundQOverP] = qop;
-  pars[Acts::eBoundTheta] = theta;
-  pars[Acts::eBoundPhi] = phi;
+  pars[Acts::eBoundTheta]  = theta;
+  pars[Acts::eBoundPhi]    = phi;
 
   Acts::BoundSquareMatrix cov = Acts::BoundSquareMatrix::Zero();
   cov(Acts::eBoundLoc0, Acts::eBoundLoc0) = m_sigmaLoc * m_sigmaLoc;
   cov(Acts::eBoundLoc1, Acts::eBoundLoc1) = m_sigmaLoc * m_sigmaLoc;
   cov(Acts::eBoundTheta, Acts::eBoundTheta) = m_sigmaAngle * m_sigmaAngle;
-  cov(Acts::eBoundPhi, Acts::eBoundPhi) = m_sigmaAngle * m_sigmaAngle;
+  cov(Acts::eBoundPhi, Acts::eBoundPhi)     = m_sigmaAngle * m_sigmaAngle;
   cov(Acts::eBoundQOverP, Acts::eBoundQOverP) =
       m_sigmaQOverP * m_sigmaQOverP;
 

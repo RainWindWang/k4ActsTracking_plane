@@ -17,7 +17,7 @@ StatusCode TrackFindingCKFAlg::initialize() {
 
 StatusCode TrackFindingCKFAlg::execute(const EventContext& ctx) const {
   const auto* params = m_inParams.get();
-  const auto* meas = m_inMeasurements.get();
+  const auto* meas   = m_inMeasurements.get();
 
   if (!params || !meas) {
     error() << "Missing input: "
@@ -41,8 +41,7 @@ StatusCode TrackFindingCKFAlg::execute(const EventContext& ctx) const {
   }
 
   debug() << "TrackFindingCKFAlg output: nTracks=" << tracks->size()
-          << ", nTrackStates="
-          << trackStates->size()
+          << ", nTrackStates=" << trackStates->size()
           << ", nFailedSeeds=" << nFailed << endmsg;
 
   m_outTracks.put(tracks);

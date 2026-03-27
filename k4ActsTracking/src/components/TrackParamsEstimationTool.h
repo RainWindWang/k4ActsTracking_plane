@@ -34,7 +34,7 @@ private:
 private:
   ServiceHandle<IActsGeoSvc> m_geoSvc{
       this, "ActsGeoSvc", "ActsGeoGen3PlaneSvc",
-      "Service providing ACTS tracking geometry and magnetic field"};
+      "Service providing ACTS tracking geometry, magnetic field, and contexts"};
 
   Gaudi::Property<double> m_assumedMomentumGeV{
       this, "AssumedMomentumGeV", 5.0,

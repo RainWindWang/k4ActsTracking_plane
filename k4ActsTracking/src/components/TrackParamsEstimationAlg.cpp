@@ -16,8 +16,8 @@ StatusCode TrackParamsEstimationAlg::initialize() {
 
 StatusCode TrackParamsEstimationAlg::execute(const EventContext& ctx) const {
   const auto* spWrap = m_inSP.get();
-  const auto* seeds = m_inSeeds.get();
-  const auto* meas = m_inMeas.get();
+  const auto* seeds  = m_inSeeds.get();
+  const auto* meas   = m_inMeas.get();
 
   if (!spWrap || !seeds || !meas) {
     error() << "Missing input: "

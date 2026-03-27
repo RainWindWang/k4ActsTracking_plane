@@ -40,6 +40,15 @@ StatusCode TrackFindingCKFTool::initialize() {
     return StatusCode::FAILURE;
   }
 
+  if (!m_geoSvc->trackingGeometry()) {
+    error() << "ActsGeoSvc returned null tracking geometry" << endmsg;
+    return StatusCode::FAILURE;
+  }
+  if (!m_geoSvc->magneticField()) {
+    error() << "ActsGeoSvc returned null magnetic field provider" << endmsg;
+    return StatusCode::FAILURE;
+  }
+
   m_logger = Acts::getDefaultLogger(name(), Acts::Logging::INFO);
 
   info() << "TrackFindingCKFTool initialized with GeoSvc=" << m_geoSvc.name()
@@ -74,7 +83,7 @@ StatusCode TrackFindingCKFTool::findTracks(
   }
 
   auto trackingGeometry = m_geoSvc->trackingGeometry();
-  auto magneticField = m_geoSvc->magneticField();
+  auto magneticField    = m_geoSvc->magneticField();
 
   if (!trackingGeometry) {
     error() << "ActsGeoSvc returned null tracking geometry" << endmsg;
@@ -84,6 +93,10 @@ StatusCode TrackFindingCKFTool::findTracks(
     error() << "ActsGeoSvc returned null magnetic field provider" << endmsg;
     return StatusCode::FAILURE;
   }
+
+  const auto& gctx = m_geoSvc->geometryContext();
+  const auto& mctx = m_geoSvc->magneticFieldContext();
+  const auto& cctx = m_geoSvc->calibrationContext();
 
   using Stepper = Acts::SympyStepper;
   using Navigator = Acts::Navigator;
@@ -100,8 +113,8 @@ StatusCode TrackFindingCKFTool::findTracks(
 
   Acts::Navigator::Config navCfg{trackingGeometry};
   navCfg.resolveSensitive = true;
-  navCfg.resolveMaterial = false;
-  navCfg.resolvePassive = false;
+  navCfg.resolveMaterial  = false;
+  navCfg.resolvePassive   = false;
 
   Navigator navigator(navCfg);
   Propagator propagator(stepper, navigator);
@@ -118,12 +131,12 @@ StatusCode TrackFindingCKFTool::findTracks(
   // Baseline SourceLink + MeasurementSelector wiring
   //
   // IMPORTANT:
-  // This is intentionally still a minimal implementation:
+  // This is still only a minimal placeholder implementation:
   //   - all measurements are exposed as candidates
-  //   - no LUXE-specific residual / layer cuts yet
+  //   - no surface/geoId-based filtering is done here
+  //   - no proper calibrator / measurement creation is wired yet
   //
-  // The next iteration should replace this by proper TrackStateCreator-style
-  // wiring (SourceLinkAccessor + calibrator + measurement selector).
+  // Therefore this is NOT yet a production-correct CKF setup.
   // --------------------------------------------------------------------------
   auto sourceLinks = buildSourceLinks(measurements);
 
@@ -140,10 +153,7 @@ StatusCode TrackFindingCKFTool::findTracks(
   Acts::CombinatorialKalmanFilter ckf(propagator, extensions);
 
   Acts::CombinatorialKalmanFilterOptions options(
-      Acts::GeometryContext{},
-      Acts::MagneticFieldContext{},
-      Acts::CalibrationContext{},
-      extensions);
+      gctx, mctx, cctx, extensions);
 
   options.maxSteps = m_maxSteps;
 
