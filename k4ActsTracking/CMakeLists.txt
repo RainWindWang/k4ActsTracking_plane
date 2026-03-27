@@ -53,6 +53,18 @@ set(_plugin_sources
 
   src/components/SeedingAlg.cpp
   src/components/SeedingTool.cpp
+
+  src/components/TrackParamsEstimationAlg.cpp
+  src/components/TrackParamsEstimationTool.cpp
+
+  src/components/TrackFindingCKFAlg.cpp
+  src/components/TrackFindingCKFTool.cpp
+
+  src/components/TrackFittingAlg.cpp
+  src/components/TrackFittingTool.cpp
+
+  src/components/ActsToEdm4hepTrackWriterAlg.cpp
+  src/components/ActsToEdm4hepTrackWriterTool.cpp
 )
 
 set(ACTS_PLUGIN_TARGETS "Acts::Core;Acts::PluginDD4hep")
@@ -63,22 +75,26 @@ endif()
 gaudi_add_module(k4ActsTrackingPlugins
   SOURCES ${_plugin_sources}
   LINK
-  Gaudi::GaudiKernel
-  k4FWCore::k4FWCore
-  EDM4HEP::edm4hep
-  DD4hep::DDCore DD4hep::DDRec
-  k4ActsTracking
-  ${ACTS_PLUGIN_TARGETS}
+    Gaudi::GaudiKernel
+    k4FWCore::k4FWCore
+    EDM4HEP::edm4hep
+    DD4hep::DDCore
+    DD4hep::DDRec
+    k4ActsTracking
+    ${ACTS_PLUGIN_TARGETS}
 )
+
 target_include_directories(k4ActsTrackingPlugins PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
-  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
 
 install(TARGETS k4ActsTrackingPlugins
   EXPORT k4ActsTrackingTargets
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT bin
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT shlib
-  COMPONENT dev)
+  COMPONENT dev
+)
 
 set(GAUDI_GENCONF_DIR "genConfDir")
 
@@ -88,5 +104,5 @@ function(set_test_env _testname)
     PYTHONPATH=${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}/${GAUDI_GENCONF_DIR}:$<TARGET_FILE_DIR:k4FWCore::k4FWCore>/../python:$ENV{PYTHONPATH}
     PATH=$<TARGET_FILE_DIR:k4FWCore::k4FWCore>/../bin:$ENV{PATH}
     K4ACTSTRACKING=${CMAKE_CURRENT_LIST_DIR}/
-    )
+  )
 endfunction()
