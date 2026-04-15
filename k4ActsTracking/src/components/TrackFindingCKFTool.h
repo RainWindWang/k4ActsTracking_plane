@@ -29,10 +29,6 @@ public:
       const k4ActsTracking::ActsTrackStateContainerPtr& trackStates) const;
 
 private:
-  std::vector<Acts::SourceLink> buildSourceLinks(
-      const k4ActsTracking::MeasurementCollection& measurements) const;
-
-private:
   ServiceHandle<IActsGeoSvc> m_geoSvc{
       this, "ActsGeoSvc", "ActsGeoGen3PlaneSvc",
       "Service providing ACTS tracking geometry, magnetic field, and contexts"};
