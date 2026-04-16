@@ -1,34 +1,18 @@
 #pragma once
 
-#include <GaudiKernel/AlgTool.h>
-#include <GaudiKernel/IAlgTool.h>
-#include <GaudiKernel/ToolHandle.h>
+#include "k4ActsTracking/ISeedingTool.h"
+
 #include <Gaudi/Property.h>
+#include <GaudiKernel/AlgTool.h>
 
 #include <Acts/Definitions/Units.hpp>
-#include <Acts/EventData/SeedContainer2.hpp>
-#include <Acts/EventData/SpacePointContainer2.hpp>
 #include <Acts/Seeding2/BroadTripletSeedFilter.hpp>
 #include <Acts/Seeding2/CylindricalSpacePointKDTree.hpp>
 #include <Acts/Seeding2/DoubletSeedFinder.hpp>
 #include <Acts/Seeding2/TripletSeedFinder.hpp>
 #include <Acts/Utilities/Logger.hpp>
-
 #include <memory>
 
-class ISeedingTool : virtual public IAlgTool {
-public:
-  DeclareInterfaceID(ISeedingTool, 1, 0);
-
-  /// Build ACTS seeds from an ACTS SpacePointContainer2.
-  ///
-  /// NOTE: The input SpacePointContainer2 must have required columns enabled
-  ///       (at least XY|ZR|Phi; and whatever else you access in implementation)
-  virtual StatusCode createSeeds(const Acts::SpacePointContainer2& spacePoints,
-                                 Acts::SeedContainer2& outSeeds) const = 0;
-
-  ~ISeedingTool() override = default;
-};
 
 class SeedingTool final : public extends<AlgTool, ISeedingTool> {
 public:

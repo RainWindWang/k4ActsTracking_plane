@@ -29,6 +29,12 @@ gaudi_add_library(k4ActsTracking
     k4FWCore::k4FWCore
     ${ACTS_LIBRARY_TARGETS}
 )
+
+target_include_directories(k4ActsTracking PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
 install(TARGETS k4ActsTracking
   EXPORT k4ActsTrackingTargets
   INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
@@ -94,6 +100,10 @@ install(TARGETS k4ActsTrackingPlugins
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT bin
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT shlib
   COMPONENT dev
+)
+
+install(DIRECTORY include/
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
 )
 
 set(GAUDI_GENCONF_DIR "genConfDir")
