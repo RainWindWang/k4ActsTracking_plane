@@ -33,7 +33,6 @@ using TrackContainerBackend = k4ActsTracking::ActsTrackContainer;
 using MutableTrackContainer =
     Acts::TrackContainer<TrackContainerBackend, TrackStateBackend,
                          std::shared_ptr>;
-
 class PreparedSourceLinkAccessor {
 public:
   using Container = std::vector<Acts::SourceLink>;
@@ -61,8 +60,9 @@ public:
               });
   }
 
-  std::pair<Iterator, Iterator> range(
-      const Acts::GeometryIdentifier& geoId) const {
+  std::pair<Iterator, Iterator> range(const Acts::Surface& surface) const {
+    const auto geoId = surface.geometryId();
+
     auto lower = std::lower_bound(
         m_links.begin(), m_links.end(), geoId,
         [](const Acts::SourceLink& sl, const Acts::GeometryIdentifier& gid) {
