@@ -18,7 +18,7 @@ public:
                      const edm4hep::TrackerHitPlaneCollection& inHits,
                      k4ActsTracking::SpacePointCollection& outSP,
                      k4ActsTracking::SourceLinkCollection& outSL,
-                     k4ActsTracking::MeasurementProvider& outMeas) const override;
+                     k4ActsTracking::MeasurementCollection& outMeas) const override;
 
 private:
   Gaudi::Property<std::string> m_actsGeoSvcName{this, "ActsGeoSvc", "ActsGeoPlaneSvc", "IActsGeoSvc provider"};

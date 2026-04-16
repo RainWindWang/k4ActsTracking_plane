@@ -32,11 +32,12 @@ const k4ActsTracking::TrackerMeasurement2D* findMeas(
 
 std::optional<std::uint32_t> firstHitIndex(
     const k4ActsTracking::SpacePointContainer::ConstProxy& sp) {
-  const auto slRange = sp.sourceLinks();
-  if (slRange.empty() || slRange[0].get() == nullptr) {
+  auto slRange = sp.sourceLinks();
+  if (slRange.empty()) {
     return std::nullopt;
   }
-  return slRange[0].get()->hitIndex;
+  const auto& sl = slRange[0].get<k4ActsTracking::IndexSourceLink>();
+  return sl.hitIndex;  
 }
 
 }  // namespace

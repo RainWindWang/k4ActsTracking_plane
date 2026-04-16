@@ -16,7 +16,7 @@ public:
                              const edm4hep::TrackerHitPlaneCollection& inHits,
                              k4ActsTracking::SpacePointCollection& outSP,
                              k4ActsTracking::SourceLinkCollection& outSL,
-                             k4ActsTracking::MeasurementProvider& outMeas) const = 0;
+                             k4ActsTracking::MeasurementCollection& outMeas) const = 0;
 
   ~ITrackerEDMConverterTool() override = default;
 };

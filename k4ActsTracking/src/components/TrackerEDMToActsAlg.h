@@ -36,7 +36,7 @@ private:
       m_outSPName, Gaudi::DataHandle::Writer, this};
   mutable k4FWCore::DataHandle<k4ActsTracking::SourceLinkCollection> m_outSL{
       m_outSLName, Gaudi::DataHandle::Writer, this};
-  mutable k4FWCore::DataHandle<k4ActsTracking::MeasurementProvider> m_outMeas{
+  mutable k4FWCore::DataHandle<k4ActsTracking::MeasurementCollection> m_outMeas{
       m_outMeasName, Gaudi::DataHandle::Writer, this};
 
   ToolHandle<ITrackerEDMConverterTool> m_tool{

@@ -42,8 +42,8 @@ install(TARGETS k4ActsTracking
 )
 
 set(_plugin_sources
-  src/components/ActsGeoSvc.cpp
-  src/components/ActsGeoGen3Svc.cpp
+	#src/components/ActsGeoSvc.cpp
+	#src/components/ActsGeoGen3Svc.cpp
   src/components/ActsTestPropagator.cpp
   src/components/ActsGeoGen3PlaneSvc.cpp
   src/components/TrackerMappingSvc.cpp
@@ -66,11 +66,11 @@ set(_plugin_sources
   src/components/TrackFindingCKFAlg.cpp
   src/components/TrackFindingCKFTool.cpp
 
-  src/components/TrackFittingAlg.cpp
-  src/components/TrackFittingTool.cpp
+  #src/components/TrackFittingAlg.cpp
+  #src/components/TrackFittingTool.cpp
 
-  src/components/ActsToEdm4hepTrackWriterAlg.cpp
-  src/components/ActsToEdm4hepTrackWriterTool.cpp
+  #src/components/ActsToEdm4hepTrackWriterAlg.cpp
+  #src/components/ActsToEdm4hepTrackWriterTool.cpp
 )
 
 set(ACTS_PLUGIN_TARGETS "Acts::Core;Acts::PluginDD4hep")
@@ -90,10 +90,6 @@ gaudi_add_module(k4ActsTrackingPlugins
     ${ACTS_PLUGIN_TARGETS}
 )
 
-target_include_directories(k4ActsTrackingPlugins PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
-  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-)
 
 install(TARGETS k4ActsTrackingPlugins
   EXPORT k4ActsTrackingTargets
@@ -102,9 +98,6 @@ install(TARGETS k4ActsTrackingPlugins
   COMPONENT dev
 )
 
-install(DIRECTORY include/
-  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-)
 
 set(GAUDI_GENCONF_DIR "genConfDir")
 

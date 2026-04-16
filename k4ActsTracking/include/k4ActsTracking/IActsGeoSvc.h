@@ -27,7 +27,7 @@
 
 #include <Acts/Geometry/GeometryContext.hpp>
 #include <Acts/MagneticField/MagneticFieldContext.hpp>
-#include <Acts/Calibration/CalibrationContext.hpp>
+#include <Acts/Utilities/CalibrationContext.hpp>
 
 namespace dd4hep {
   namespace rec {

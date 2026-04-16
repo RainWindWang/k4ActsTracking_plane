@@ -27,18 +27,18 @@ StatusCode TrackParamsEstimationAlg::execute(const EventContext& ctx) const {
     return StatusCode::FAILURE;
   }
 
-  k4ActsTracking::InitialTrackParametersCollection out;
-  out.reserve(seeds->size());
+  auto out = std::make_unique<k4ActsTracking::InitialTrackParametersCollection>();
+  out->reserve(seeds->size());
 
   for (std::size_t i = 0; i < seeds->size(); ++i) {
     const auto seed = (*seeds)[i];
     auto initPars = m_tool->estimateOneSeed(spWrap->sps, seed, *meas);
     if (initPars.has_value()) {
-      out.push_back(std::move(*initPars));
+      out->push_back(std::move(*initPars));
     }
   }
 
-  debug() << "TrackParamsEstimationAlg: produced " << out.size()
+  debug() << "TrackParamsEstimationAlg: produced " << out->size()
           << " initial parameter set(s) from " << seeds->size()
           << " seed(s)" << endmsg;
 

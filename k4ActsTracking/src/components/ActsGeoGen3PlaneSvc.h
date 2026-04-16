@@ -8,7 +8,7 @@
 
 #include "GaudiKernel/Service.h"
 
-#include <Acts/Calibration/CalibrationContext.hpp>
+#include <Acts/Utilities/CalibrationContext.hpp>
 #include <Acts/Geometry/GeometryContext.hpp>
 #include <Acts/MagneticField/MagneticFieldContext.hpp>
 

@@ -108,12 +108,19 @@ StatusCode ActsGeoGen3PlaneSvc::initialize() {
   // --------------------------------------------------------------------------
   auto gaudiLogger = makeActsGaudiLogger(this);
 
-  ActsPlugins::DD4hep::BlueprintBuilder builder(
+/*  ActsPlugins::DD4hep::BlueprintBuilder builder(
       {{
            .dd4hepDetector = m_dd4hepGeo,
            .lengthScale    = Acts::UnitConstants::mm / dd4hep::mm,
        }},
       gaudiLogger->cloneWithSuffix("|BlpBld"));
+*/
+    ActsPlugins::DD4hep::BlueprintBuilder::Config builderCfg;
+  builderCfg.dd4hepDetector = m_dd4hepGeo;
+  builderCfg.lengthScale = Acts::UnitConstants::mm / dd4hep::mm;
+
+  ActsPlugins::DD4hep::BlueprintBuilder builder(
+      builderCfg, gaudiLogger->cloneWithSuffix("|BlpBld"));
 
   using Acts::Experimental::Blueprint;
   using Acts::Experimental::BlueprintOptions;

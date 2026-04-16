@@ -31,7 +31,7 @@ StatusCode TrackerEDMConverterTool::convert(const EventContext& /*ctx*/,
                                             const edm4hep::TrackerHitPlaneCollection& inHits,
                                             k4ActsTracking::SpacePointCollection& outSP,
                                             k4ActsTracking::SourceLinkCollection& outSL,
-                                            k4ActsTracking::MeasurementProvider& outMeas) const {
+                                            k4ActsTracking::MeasurementCollection& outMeas) const {
   outSL.clear();
   outSP.sps.clear();
 
@@ -110,14 +110,14 @@ StatusCode TrackerEDMConverterTool::convert(const EventContext& /*ctx*/,
     ++idx;
   }
 
-  outMeas = k4ActsTracking::MeasurementProvider(std::move(meas));
+  outMeas = k4ActsTracking::MeasurementCollection(std::move(meas));
 
   debug() << fmt::format(
       "TrackerEDMConverterTool: inHits={}, outSP={}, outSL={}, outMeas={}",
       inHits.size(),
       outSP.sps.size(),
       outSL.size(),
-      outMeas.measurements().size())
+      outMeas.size())
           << endmsg;
 
   return StatusCode::SUCCESS;

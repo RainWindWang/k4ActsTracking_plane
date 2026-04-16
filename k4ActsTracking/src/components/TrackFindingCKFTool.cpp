@@ -1,5 +1,8 @@
 #include "TrackFindingCKFTool.h"
 
+#include <Acts/Definitions/Direction.hpp>
+#include <Acts/EventData/MultiTrajectory.hpp>
+#include <Acts/EventData/ProxyAccessor.hpp>
 #include <Acts/EventData/SourceLink.hpp>
 #include <Acts/EventData/TrackContainer.hpp>
 #include <Acts/EventData/VectorMultiTrajectory.hpp>
@@ -8,16 +11,16 @@
 #include <Acts/Propagator/Navigator.hpp>
 #include <Acts/Propagator/Propagator.hpp>
 #include <Acts/Propagator/SympyStepper.hpp>
+#include <Acts/Surfaces/PerigeeSurface.hpp>
 #include <Acts/TrackFinding/CombinatorialKalmanFilter.hpp>
 #include <Acts/TrackFinding/TrackStateCreator.hpp>
 #include <Acts/TrackFitting/GainMatrixUpdater.hpp>
-#include <Acts/Utilities/Logger.hpp>
+#include <Acts/Utilities/TrackHelpers.hpp>
 
+#include <algorithm>
+#include <array>
 #include <cassert>
-#include <cstdint>
-#include <limits>
 #include <memory>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -25,132 +28,111 @@ DECLARE_COMPONENT(TrackFindingCKFTool)
 
 namespace {
 
-using TrackContainer =
-    Acts::TrackContainer<Acts::VectorTrackContainer,
-                         Acts::VectorMultiTrajectory,
+using TrackStateBackend = k4ActsTracking::ActsTrackStateContainer;
+using TrackContainerBackend = k4ActsTracking::ActsTrackContainer;
+using MutableTrackContainer =
+    Acts::TrackContainer<TrackContainerBackend, TrackStateBackend,
                          std::shared_ptr>;
 
-class IndexSourceLink {
+class PreparedSourceLinkAccessor {
 public:
-  IndexSourceLink() = default;
+  using Container = std::vector<Acts::SourceLink>;
+  using Iterator = Container::const_iterator;
 
-  IndexSourceLink(Acts::GeometryIdentifier geoId, std::uint32_t idx)
-      : m_geoId(geoId), m_index(idx) {}
+  PreparedSourceLinkAccessor() = default;
 
-  Acts::GeometryIdentifier geometryId() const { return m_geoId; }
-  std::uint32_t index() const { return m_index; }
+  explicit PreparedSourceLinkAccessor(
+      const k4ActsTracking::SourceLinkCollection& sourceLinks) {
+    prepare(sourceLinks);
+  }
 
-  bool operator==(const IndexSourceLink& other) const {
-    return m_geoId == other.m_geoId && m_index == other.m_index;
+  void prepare(const k4ActsTracking::SourceLinkCollection& sourceLinks) {
+    m_links.clear();
+    m_links.reserve(sourceLinks.size());
+
+    for (const auto& sl : sourceLinks) {
+      m_links.emplace_back(Acts::SourceLink{sl});
+    }
+
+    std::sort(m_links.begin(), m_links.end(),
+              [](const Acts::SourceLink& a, const Acts::SourceLink& b) {
+                return a.get<k4ActsTracking::IndexSourceLink>().geoId <
+                       b.get<k4ActsTracking::IndexSourceLink>().geoId;
+              });
+  }
+
+  std::pair<Iterator, Iterator> range(
+      const Acts::GeometryIdentifier& geoId) const {
+    auto lower = std::lower_bound(
+        m_links.begin(), m_links.end(), geoId,
+        [](const Acts::SourceLink& sl, const Acts::GeometryIdentifier& gid) {
+          return sl.get<k4ActsTracking::IndexSourceLink>().geoId < gid;
+        });
+
+    auto upper = std::upper_bound(
+        m_links.begin(), m_links.end(), geoId,
+        [](const Acts::GeometryIdentifier& gid, const Acts::SourceLink& sl) {
+          return gid < sl.get<k4ActsTracking::IndexSourceLink>().geoId;
+        });
+
+    return {lower, upper};
   }
 
 private:
-  Acts::GeometryIdentifier m_geoId{};
-  std::uint32_t m_index{std::numeric_limits<std::uint32_t>::max()};
+  Container m_links;
 };
 
-/// --------------------------------------------------------------------------
-struct MeasurementLookup {
-  std::unordered_map<std::uint32_t, const k4ActsTracking::TrackerMeasurement2D*> byHitIndex;
-  std::unordered_map<std::uint64_t, std::vector<Acts::SourceLink>> byGeoId;
-};
-
-MeasurementLookup buildMeasurementLookup(
-    const k4ActsTracking::MeasurementCollection& measurements) {
-  MeasurementLookup lookup;
-
-  for (const auto& m : measurements) {
-    lookup.byHitIndex.emplace(m.hitIndex, &m);
-
-    IndexSourceLink isl{m.geoId, m.hitIndex};
-    lookup.byGeoId[m.geoId.value()].emplace_back(isl);
-  }
-
-  return lookup;
-}
-
-/// --------------------------------------------------------------------------
-class IndexSourceLinkAccessor {
+class PassThroughMeasurementCalibrator {
 public:
-  using Container = std::unordered_map<std::uint64_t, std::vector<Acts::SourceLink>>;
-  using Iterator = std::vector<Acts::SourceLink>::const_iterator;
+  explicit PassThroughMeasurementCalibrator(
+      const k4ActsTracking::MeasurementCollection& measurements)
+      : m_measurements(&measurements) {}
 
-  const Container* container{nullptr};
+  void calibrate(const Acts::GeometryContext& /*gctx*/,
+                 const Acts::CalibrationContext& /*cctx*/,
+                 const Acts::SourceLink& sourceLink,
+                 TrackStateBackend::TrackStateProxy trackState) const {
+    Acts::SourceLink sl = sourceLink;
+    trackState.setUncalibratedSourceLink(std::move(sl));
 
-  std::pair<Iterator, Iterator> range(const Acts::Surface& surface) const {
-    static const std::vector<Acts::SourceLink> kEmpty{};
+    const auto& idxSourceLink =
+        sourceLink.get<k4ActsTracking::IndexSourceLink>();
 
-    if (container == nullptr) {
-      return {kEmpty.begin(), kEmpty.end()};
-    }
+    assert(m_measurements != nullptr);
+    assert(idxSourceLink.hitIndex < m_measurements->size());
 
-    const auto it = container->find(surface.geometryId().value());
-    if (it == container->end()) {
-      return {kEmpty.begin(), kEmpty.end()};
-    }
+    const auto& meas = m_measurements->at(idxSourceLink.hitIndex);
 
-    return {it->second.begin(), it->second.end()};
-  }
-};
+    // Minimal consistency guard.
+    assert(meas.geoId == idxSourceLink.geoId);
 
-class PassThroughMeasurementSelector {
-public:
-  using Traj = Acts::VectorMultiTrajectory;
+    trackState.allocateCalibrated(meas.loc, meas.cov);
 
-  Acts::Result<std::pair<typename std::vector<Traj::TrackStateProxy>::iterator,
-                         typename std::vector<Traj::TrackStateProxy>::iterator>>
-  select(std::vector<Traj::TrackStateProxy>& candidates,
-         bool& isOutlier,
-         const Acts::Logger&) const {
-    isOutlier = false;
-    return std::make_pair(candidates.begin(), candidates.end());
-  }
-};
-
-/// --------------------------------------------------------------------------
-class MeasurementCalibratorAdapter {
-public:
-  explicit MeasurementCalibratorAdapter(const MeasurementLookup& lookup)
-      : m_lookup(lookup) {}
-
-  template <typename track_state_proxy_t>
-  Acts::Result<void> calibrate(track_state_proxy_t& trackState) const {
-    assert(trackState.hasUncalibratedSourceLink());
-
-    const auto& sourceLink =
-        trackState.getUncalibratedSourceLink().template get<IndexSourceLink>();
-
-    const auto it = m_lookup.byHitIndex.find(sourceLink.index());
-    if (it == m_lookup.byHitIndex.end() || it->second == nullptr) {
-      return Acts::Result<void>::failure(
-          std::error_code(static_cast<int>(Acts::CombinatorialKalmanFilterError::UpdateFailed),
-                          Acts::CombinatorialKalmanFilterErrorCategory()));
-    }
-
-    const auto& meas = *(it->second);
-
-    // Safety check: the SourceLink and measurement should refer to the same surface
-    if (meas.geoId != sourceLink.geometryId()) {
-      return Acts::Result<void>::failure(
-          std::error_code(static_cast<int>(Acts::CombinatorialKalmanFilterError::UpdateFailed),
-                          Acts::CombinatorialKalmanFilterErrorCategory()));
-    }
-
-    trackState.allocateCalibrated(2);
-    trackState.setProjectorSubspaceIndices(
-        std::array<Acts::BoundIndices, 2>{Acts::eBoundLoc0, Acts::eBoundLoc1});
-
-    auto calibrated = trackState.template calibrated<2>();
-    calibrated.parameters()[0] = meas.loc[0];
-    calibrated.parameters()[1] = meas.loc[1];
-    calibrated.covariance()    = meas.cov;
-    // -----------------------------------------------------------------------
-
-    return Acts::Result<void>::success();
+    const std::array<Acts::BoundIndices, 2> indices = {Acts::eBoundLoc0,
+                                                       Acts::eBoundLoc1};
+    trackState.setProjectorSubspaceIndices(indices);
   }
 
 private:
-  const MeasurementLookup& m_lookup;
+  const k4ActsTracking::MeasurementCollection* m_measurements = nullptr;
+};
+
+class MeasurementSelectorWrapper {
+public:
+  using Traj = TrackStateBackend;
+
+  explicit MeasurementSelectorWrapper(Acts::MeasurementSelector selector)
+      : m_selector(std::move(selector)) {}
+
+  Acts::Result<std::pair<std::vector<Traj::TrackStateProxy>::iterator,
+                         std::vector<Traj::TrackStateProxy>::iterator>>
+  select(std::vector<Traj::TrackStateProxy>& candidates, bool& isOutlier,
+         const Acts::Logger& logger) const {
+    return m_selector.select<TrackStateBackend>(candidates, isOutlier, logger);
+  }
+
+private:
+  Acts::MeasurementSelector m_selector;
 };
 
 }  // namespace
@@ -158,128 +140,165 @@ private:
 TrackFindingCKFTool::TrackFindingCKFTool(const std::string& type,
                                          const std::string& name,
                                          const IInterface* parent)
-    : extends(type, name, parent) {}
+    : extends<AlgTool, ITrackFindingTool>(type, name, parent) {}
 
 StatusCode TrackFindingCKFTool::initialize() {
   if (m_geoSvc.retrieve().isFailure()) {
-    error() << "Failed to retrieve ActsGeoSvc: " << m_geoSvc.name() << endmsg;
-    return StatusCode::FAILURE;
-  }
-
-  if (!m_geoSvc->trackingGeometry()) {
-    error() << "ActsGeoSvc returned null tracking geometry" << endmsg;
-    return StatusCode::FAILURE;
-  }
-  if (!m_geoSvc->magneticField()) {
-    error() << "ActsGeoSvc returned null magnetic field provider" << endmsg;
+    error() << "Failed to retrieve ActsGeoSvc " << m_geoSvc.name() << endmsg;
     return StatusCode::FAILURE;
   }
 
   m_logger = Acts::getDefaultLogger(name(), Acts::Logging::INFO);
 
-  info() << "TrackFindingCKFTool initialized with GeoSvc=" << m_geoSvc.name()
-         << ", MaxSteps=" << m_maxSteps << endmsg;
+  info() << "Initialized TrackFindingCKFTool with Chi2CutOff=" << m_chi2CutOff
+         << ", NumMeasurementsCutOff=" << m_numMeasurementsCutOff
+         << ", MaxSteps=" << m_maxSteps
+         << ", ReverseSearch=" << (m_reverseSearch ? "true" : "false")
+         << endmsg;
 
   return StatusCode::SUCCESS;
 }
 
 StatusCode TrackFindingCKFTool::findTracks(
-    const Acts::BoundTrackParameters& initialParams,
+    const k4ActsTracking::InitialTrackParametersCollection& initialParameters,
+    const k4ActsTracking::SourceLinkCollection& sourceLinks,
     const k4ActsTracking::MeasurementCollection& measurements,
-    const k4ActsTracking::ActsTrackContainerPtr& tracks,
-    const k4ActsTracking::ActsTrackStateContainerPtr& trackStates) const {
-
-  if (!tracks || !trackStates) {
-    error() << "Null output track/state container passed to TrackFindingCKFTool"
-            << endmsg;
-    return StatusCode::FAILURE;
+    k4ActsTracking::ActsTrackContainerPtr& outTracks,
+    k4ActsTracking::ActsTrackStateContainerPtr& outTrackStates) const {
+  if (!outTracks) {
+    outTracks = std::make_shared<k4ActsTracking::ActsTrackContainer>();
+  }
+  if (!outTrackStates) {
+    outTrackStates = std::make_shared<k4ActsTracking::ActsTrackStateContainer>();
   }
 
-  auto trackingGeometry = m_geoSvc->trackingGeometry();
-  auto magneticField    = m_geoSvc->magneticField();
+  if (initialParameters.empty()) {
+    debug() << "No initial parameters provided; producing empty track output"
+            << endmsg;
+    return StatusCode::SUCCESS;
+  }
+
+  // --- Geometry / field / context ---
+  const auto trackingGeometry = m_geoSvc->trackingGeometry();
+  const auto magneticField = m_geoSvc->magneticField();
+  const auto& geoCtx = m_geoSvc->geometryContext();
+  const auto& magCtx = m_geoSvc->magneticFieldContext();
+  const auto& calibCtx = m_geoSvc->calibrationContext();
 
   if (!trackingGeometry) {
-    error() << "ActsGeoSvc returned null tracking geometry" << endmsg;
+    error() << "TrackingGeometry is null" << endmsg;
     return StatusCode::FAILURE;
   }
   if (!magneticField) {
-    error() << "ActsGeoSvc returned null magnetic field provider" << endmsg;
+    error() << "MagneticFieldProvider is null" << endmsg;
     return StatusCode::FAILURE;
   }
 
-  const auto& gctx = m_geoSvc->geometryContext();
-  const auto& mctx = m_geoSvc->magneticFieldContext();
-  const auto& cctx = m_geoSvc->calibrationContext();
+  // --- Prepare source links + calibrator + measurement selector ---
+  PreparedSourceLinkAccessor slAccessor(sourceLinks);
+  PassThroughMeasurementCalibrator calibrator(measurements);
 
-  using Stepper    = Acts::SympyStepper;
-  using Navigator  = Acts::Navigator;
-  using Propagator = Acts::Propagator<Stepper, Navigator>;
-  using Extensions = Acts::CombinatorialKalmanFilterExtensions<TrackContainer>;
+  Acts::MeasurementSelector::Config measurementSelectorCfg = {
+      {Acts::GeometryIdentifier(),
+       {{}, {m_chi2CutOff.value()},
+        {static_cast<std::size_t>(m_numMeasurementsCutOff.value())}}}};
+
+  MeasurementSelectorWrapper measSel{
+      Acts::MeasurementSelector(measurementSelectorCfg)};
+
   using TrackStateCreatorType =
-      Acts::TrackStateCreator<IndexSourceLinkAccessor::Iterator, TrackContainer>;
-
-  Stepper stepper(std::move(magneticField));
-
-  Acts::Navigator::Config navCfg{trackingGeometry};
-  navCfg.resolveSensitive = true;
-  navCfg.resolveMaterial  = false;
-  navCfg.resolvePassive   = false;
-
-  Navigator navigator(navCfg);
-  Propagator propagator(stepper, navigator);
-
-  // --------------------------------------------------------------------------
-  auto lookup = buildMeasurementLookup(measurements);
-
-  IndexSourceLinkAccessor slAccessor;
-  slAccessor.container = &lookup.byGeoId;
-
-  MeasurementCalibratorAdapter calibrator(lookup);
-  PassThroughMeasurementSelector measSel;
+      Acts::TrackStateCreator<PreparedSourceLinkAccessor::Iterator,
+                              MutableTrackContainer>;
   TrackStateCreatorType trackStateCreator;
-
   trackStateCreator.sourceLinkAccessor
-      .template connect<&IndexSourceLinkAccessor::range>(&slAccessor);
-
+      .template connect<&PreparedSourceLinkAccessor::range>(&slAccessor);
   trackStateCreator.calibrator
-      .template connect<&MeasurementCalibratorAdapter::calibrate>(&calibrator);
-
+      .template connect<&PassThroughMeasurementCalibrator::calibrate>(
+          &calibrator);
   trackStateCreator.measurementSelector
-      .template connect<&PassThroughMeasurementSelector::select>(&measSel);
+      .template connect<&MeasurementSelectorWrapper::select>(&measSel);
 
   Acts::GainMatrixUpdater updater;
+
+  using Extensions = Acts::CombinatorialKalmanFilterExtensions<
+      MutableTrackContainer>;
   Extensions extensions;
-
-  extensions.updater.connect<
-      &Acts::GainMatrixUpdater::operator()<Acts::VectorMultiTrajectory>>(
-      &updater);
-
+  extensions.updater.connect<&Acts::GainMatrixUpdater::operator()<
+      typename MutableTrackContainer::TrackStateContainerBackend>>(&updater);
   extensions.createTrackStates
       .template connect<&TrackStateCreatorType::createTrackStates>(
           &trackStateCreator);
 
-  // --------------------------------------------------------------------------
-  Acts::PropagatorPlainOptions propagatorPlainOptions(gctx, mctx);
-  propagatorPlainOptions.maxSteps = m_maxSteps;
+  // --- Propagator / CKF ---
+  Acts::Navigator::Config navCfg{trackingGeometry};
+  navCfg.resolvePassive = m_resolvePassive;
+  navCfg.resolveMaterial = m_resolveMaterial;
+  navCfg.resolveSensitive = m_resolveSensitive;
 
-  Acts::CombinatorialKalmanFilterOptions options(
-      gctx, mctx, cctx, extensions, propagatorPlainOptions);
+  using Stepper = Acts::SympyStepper;
+  using Navigator = Acts::Navigator;
+  using Propagator = Acts::Propagator<Stepper, Navigator>;
+  using CKF = Acts::CombinatorialKalmanFilter<Propagator, MutableTrackContainer>;
+  using TrackFinderOptions =
+      Acts::CombinatorialKalmanFilterOptions<MutableTrackContainer>;
 
-  TrackContainer outTracks(tracks, trackStates);
+  Stepper stepper(magneticField);
+  Navigator navigator(navCfg, m_logger->cloneWithSuffix("Navigator"));
+  Propagator propagator(std::move(stepper), std::move(navigator),
+                        m_logger->cloneWithSuffix("Propagator"));
+  CKF trackFinder(std::move(propagator), m_logger->cloneWithSuffix("CKF"));
 
-  Acts::CombinatorialKalmanFilter ckf(
-      propagator, logger().cloneWithSuffix("CKF"));
+  Acts::PropagatorPlainOptions propOptions(geoCtx, magCtx);
+  propOptions.maxSteps = m_maxSteps;
+  propOptions.direction = m_reverseSearch ? Acts::Direction::Backward()
+                                          : Acts::Direction::Forward();
 
-  auto rootBranch = outTracks.makeTrack();
-  auto result = ckf.findTracks(initialParams, options, outTracks, rootBranch);
+  auto perigeeSurface = Acts::Surface::makeShared<Acts::PerigeeSurface>(
+      Acts::Vector3{0., 0., 0.});
 
-  if (!result.ok()) {
-    warning() << "CKF failed with error code " << result.error() << endmsg;
-    return StatusCode::FAILURE;
+  TrackFinderOptions options(geoCtx, magCtx, calibCtx, extensions, propOptions);
+  options.targetSurface = m_reverseSearch ? perigeeSurface.get() : nullptr;
+
+  // --- Final + temporary containers ---
+  MutableTrackContainer finalTracks(outTracks, outTrackStates);
+
+  auto tempTrackContainer =
+      std::make_shared<k4ActsTracking::ActsTrackContainer>();
+  auto tempTrackStates =
+      std::make_shared<k4ActsTracking::ActsTrackStateContainer>();
+  MutableTrackContainer tempTracks(tempTrackContainer, tempTrackStates);
+
+  std::size_t nFound = 0;
+  std::size_t nFailed = 0;
+
+  for (const auto& initialParams : initialParameters) {
+    tempTracks.clear();
+
+    auto rootBranch = tempTracks.makeTrack();
+    auto result =
+        trackFinder.findTracks(initialParams, options, tempTracks, rootBranch);
+
+    if (!result.ok()) {
+      ++nFailed;
+      warning() << "CKF failed for one initial parameter with error "
+                << result.error() << endmsg;
+      continue;
+    }
+
+    for (auto& track : result.value()) {
+      if (m_trimTracks) {
+        Acts::trimTrack(track, true, true, true, true);
+      }
+      Acts::calculateTrackQuantities(track);
+
+      auto dest = finalTracks.makeTrack();
+      dest.copyFrom(track);
+      ++nFound;
+    }
   }
 
-  debug() << "CKF produced " << result.value().size()
-          << " track candidate(s) for one initial parameter" << endmsg;
+  debug() << "Track finding finished: found=" << nFound
+          << ", failedSeeds=" << nFailed << endmsg;
 
   return StatusCode::SUCCESS;
 }

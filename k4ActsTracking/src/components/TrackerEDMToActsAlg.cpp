@@ -39,7 +39,7 @@ StatusCode TrackerEDMToActsAlg::execute(const EventContext& ctx) const {
 
 debug() << fmt::format(
                "TrackerEDMToActsAlg: inHits={}, outSP={}, outSL={}, outMeas={}",
-               in->size(), sp->sps.size(), sl->size(), mp->measurements().size())
+               in->size(), sp->sps.size(), sl->size(), mp->size())
         << endmsg;
 
   return StatusCode::SUCCESS;

@@ -15,7 +15,7 @@
 #include <string>
 
 class TrackParamsEstimationTool final
-    : public extends<GaudiTool, ITrackParamsEstimationTool> {
+    : public extends<AlgTool, ITrackParamsEstimationTool> {
 public:
   TrackParamsEstimationTool(const std::string& type,
                             const std::string& name,
