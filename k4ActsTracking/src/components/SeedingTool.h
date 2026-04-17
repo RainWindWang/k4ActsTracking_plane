@@ -13,6 +13,7 @@
 #include <Acts/Utilities/Logger.hpp>
 
 #include <memory>
+#include <vector>
 
 class SeedingTool final : public extends<AlgTool, ISeedingTool> {
 public:
@@ -82,18 +83,38 @@ private:
   Gaudi::Property<float> m_rMinMiddle{this, "rMinMiddle", 0.0f, ""};
   Gaudi::Property<float> m_rMaxMiddle{this, "rMaxMiddle", 1e9f, ""};
 
-  // Straight-line consistency cut (dominant for B=0 tracker)
+  // ---------------------------------------------------------------------------
+  // Global on/off
+  // ---------------------------------------------------------------------------
   Gaudi::Property<bool> m_enableStraightLineCut{
       this, "enableStraightLineCut", true, ""};
+
+  // ---------------------------------------------------------------------------
+  // 0) Seed-layer selection cut (applied first)
+  // ---------------------------------------------------------------------------
+  Gaudi::Property<bool> m_enableSeedLayerSelectionCut{
+      this, "enableSeedLayerSelectionCut", false,
+      "Require seed layers to match configured seedLayers exactly (or reversed if allowed)"};
+  Gaudi::Property<std::vector<int>> m_seedLayers{
+      this, "seedLayers", std::vector<int>{0, 1, 2},
+      "Required seed layers, e.g. [0,1,2]"};
+  Gaudi::Property<bool> m_allowReversedSeedLayers{
+      this, "allowReversedSeedLayers", true,
+      "Allow reversed layer order to match seedLayers, e.g. [2,1,0] for configured [0,1,2]"};
+
+  // ---------------------------------------------------------------------------
+  // 1) Collinearity cut
+  // ---------------------------------------------------------------------------
+  Gaudi::Property<bool> m_enableCollinearityCut{
+      this, "enableCollinearityCut", true,
+      "Enable collinearity hard cut"};
   Gaudi::Property<float> m_maxCollinearity{
       this, "maxCollinearity", 5e-3f,
       "Normalized cross-product magnitude threshold"};
 
   // ---------------------------------------------------------------------------
-  // LUXE straight-line seeding optimization
+  // 2) Layer uniqueness + monotonic order
   // ---------------------------------------------------------------------------
-
-  // layer uniqueness + monotonic order
   Gaudi::Property<bool> m_enableLayerOrderCut{
       this, "enableLayerOrderCut", true,
       "Require unique layers and strictly monotonic layer order"};
@@ -101,10 +122,22 @@ private:
       this, "preferContinuousTriplets", true,
       "Prefer continuous-layer triplets (e.g. 0-1-2 / 1-2-3) in ranking"};
 
-  // fitted-line residual sanity and 4th-layer support
+  // ---------------------------------------------------------------------------
+  // 3) Fitted-line residual sanity
+  // ---------------------------------------------------------------------------
+  Gaudi::Property<bool> m_enableTripletResidualCut{
+      this, "enableTripletResidualCut", true,
+      "Enable hard cut on average triplet residual"};
   Gaudi::Property<float> m_tripletResidualMax{
       this, "tripletResidualMax", 0.50f,
       "Max average residual [mm] of the 3-point fitted straight line"};
+
+  // ---------------------------------------------------------------------------
+  // 4) 4th-layer support scoring
+  // ---------------------------------------------------------------------------
+  Gaudi::Property<bool> m_enableFourthLayerSupportScoring{
+      this, "enableFourthLayerSupportScoring", true,
+      "Enable extra-layer support search and scoring"};
   Gaudi::Property<float> m_supportResidualMax{
       this, "supportResidualMax", 0.80f,
       "Residual threshold [mm] for counting an extra-layer support point"};
@@ -129,10 +162,12 @@ private:
       this, "collinearityPenalty", 1.0f,
       "Penalty coefficient for collinearity in seed score"};
 
-  // duplicate suppression
+  // ---------------------------------------------------------------------------
+  // 5) Final family duplicate suppression
+  // ---------------------------------------------------------------------------
   Gaudi::Property<bool> m_enableFamilyDuplicateSuppression{
       this, "enableFamilyDuplicateSuppression", true,
-      "Enable seed family duplicate suppression after seed scoring"};
+      "Enable seed family duplicate suppression after all previous cuts/scoring"};
   Gaudi::Property<float> m_familySlopeBin{
       this, "familySlopeBin", 5.0e-4f,
       "Quantization bin for fitted line slopes ax/ay in family key"};

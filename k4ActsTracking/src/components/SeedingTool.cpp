@@ -25,7 +25,6 @@ namespace {
 static inline float collinearity(const Acts::Vector3& a,
                                  const Acts::Vector3& b,
                                  const Acts::Vector3& c) {
-  // returns |(b-a) x (c-a)| / (|b-a| |c-a|)  (0 => perfectly collinear)
   const Acts::Vector3 u = b - a;
   const Acts::Vector3 v = c - a;
   const double nu = u.norm();
@@ -38,7 +37,6 @@ static inline float collinearity(const Acts::Vector3& a,
 }
 
 static inline int approxLayerFromZ(float z) {
-  // Debug helper for current LUXE test geometry
   constexpr float zLayers[] = {3961.9f, 4061.9f, 4161.9f, 4261.9f};
 
   int bestLayer = -1;
@@ -61,6 +59,34 @@ static inline bool isContinuousMonotonic3(int a, int b, int c) {
   return ((a + 1 == b) && (b + 1 == c)) || ((a - 1 == b) && (b - 1 == c));
 }
 
+static inline bool matchesConfiguredSeedLayers(const std::array<int, 3>& layers,
+                                               const std::vector<int>& required,
+                                               bool allowReverse) {
+  if (required.size() != 3) {
+    return true;
+  }
+
+  const bool direct =
+      (layers[0] == required[0]) &&
+      (layers[1] == required[1]) &&
+      (layers[2] == required[2]);
+
+  if (direct) {
+    return true;
+  }
+
+  if (!allowReverse) {
+    return false;
+  }
+
+  const bool reverse =
+      (layers[0] == required[2]) &&
+      (layers[1] == required[1]) &&
+      (layers[2] == required[0]);
+
+  return reverse;
+}
+
 struct SeedLineFit {
   bool valid = false;
   float ax = 0.0f;  // x = ax * z + bx
@@ -75,6 +101,7 @@ struct SeedEval {
   std::array<Acts::SpacePointIndex2, 3> spIdx = {0, 0, 0};
   std::array<int, 3> layers = {-1, -1, -1};
 
+  bool matchesSeedLayerSelection = true;
   bool uniqueLayers = false;
   bool monotonicLayers = false;
   bool continuousLayers = false;
@@ -89,7 +116,7 @@ struct SeedEval {
   float supportAvgResidual = 1e9f;
   float supportMaxResidual = 1e9f;
 
-  float score = -1.0f;
+  float score = 0.0f;
 };
 
 struct FamilyKey {
@@ -216,16 +243,16 @@ void dumpSpacePoint(MsgStreamT& log,
   const float varZ = sp.varianceZ();
   const int layer = approxLayerFromZ(z);
 
-std::string slInfo = "nSL=0";
-const auto slRange = sp.sourceLinks();
-if (!slRange.empty()) {
-  try {
-    const auto& sl = slRange[0].get<k4ActsTracking::IndexSourceLink>();
-    slInfo = fmt::format("hitIndex={}, geoId={}", sl.hitIndex, sl.geoId.value());
-  } catch (const std::bad_any_cast&) {
-    slInfo = "SL=bad_any_cast";
+  std::string slInfo = "nSL=0";
+  const auto slRange = sp.sourceLinks();
+  if (!slRange.empty()) {
+    try {
+      const auto& sl = slRange[0].get<k4ActsTracking::IndexSourceLink>();
+      slInfo = fmt::format("hitIndex={}, geoId={}", sl.hitIndex, sl.geoId.value());
+    } catch (const std::bad_any_cast&) {
+      slInfo = "SL=bad_any_cast";
+    }
   }
-}
 
   log << fmt::format(
       "{}SP[{:<2}] layer~{} x={:9.3f} y={:9.3f} z={:9.3f} r={:9.3f} "
@@ -259,7 +286,7 @@ void dumpSeedEval(MsgStreamT& log,
                   std::size_t seedIndex,
                   const std::string& prefix = "") {
   log << fmt::format(
-      "{}seedEval[{}]: valid={} layers=({}, {}, {}) unique={} monotonic={} continuous={} "
+      "{}seedEval[{}]: valid={} layers=({}, {}, {}) matchSeedLayers={} unique={} monotonic={} continuous={} "
       "col={:.8g} tripletAvgRes={:.6g} tripletMaxRes={:.6g} "
       "supportLayers={} supportPoints={} supportAvgRes={:.6g} supportMaxRes={:.6g} "
       "line(x=az+b: a={:.8g}, b={:.6g}; y=cz+d: c={:.8g}, d={:.6g}) "
@@ -267,6 +294,7 @@ void dumpSeedEval(MsgStreamT& log,
       prefix, seedIndex,
       e.valid ? 1 : 0,
       e.layers[0], e.layers[1], e.layers[2],
+      e.matchesSeedLayerSelection ? 1 : 0,
       e.uniqueLayers ? 1 : 0,
       e.monotonicLayers ? 1 : 0,
       e.continuousLayers ? 1 : 0,
@@ -307,6 +335,9 @@ static inline bool betterSeedEval(const SeedEval& a,
 
 static inline SeedEval evaluateSeed(const Acts::SpacePointContainer2& coreSpacePoints,
                                     const std::array<Acts::SpacePointIndex2, 3>& idx,
+                                    const std::vector<int>& requiredSeedLayers,
+                                    bool allowReversedSeedLayers,
+                                    bool enableFourthLayerSupportScoring,
                                     float supportResidualMax,
                                     float supportLayerScoreWeight,
                                     float supportPointScoreWeight,
@@ -334,6 +365,9 @@ static inline SeedEval evaluateSeed(const Acts::SpacePointContainer2& coreSpaceP
       approxLayerFromZ(s2.zr()[0])
   };
 
+  e.matchesSeedLayerSelection =
+      matchesConfiguredSeedLayers(e.layers, requiredSeedLayers, allowReversedSeedLayers);
+
   e.uniqueLayers =
       (e.layers[0] != e.layers[1]) &&
       (e.layers[0] != e.layers[2]) &&
@@ -352,60 +386,67 @@ static inline SeedEval evaluateSeed(const Acts::SpacePointContainer2& coreSpaceP
 
   e.tripletAvgResidual = computeTripletAvgResidual(e.line, pts, e.tripletMaxResidual);
 
-  std::array<bool, 4> layerUsed = {false, false, false, false};
-  for (int l : e.layers) {
-    if (l >= 0 && l < 4) {
-      layerUsed[l] = true;
-    }
-  }
-
-  float supportResidualSum = 0.0f;
-  e.supportMaxResidual = 0.0f;
-
-  for (int extraLayer = 0; extraLayer < 4; ++extraLayer) {
-    if (layerUsed[extraLayer]) {
-      continue;
+  if (enableFourthLayerSupportScoring) {
+    std::array<bool, 4> layerUsed = {false, false, false, false};
+    for (int l : e.layers) {
+      if (l >= 0 && l < 4) {
+        layerUsed[l] = true;
+      }
     }
 
-    float bestResThisLayer = std::numeric_limits<float>::max();
-    bool found = false;
+    float supportResidualSum = 0.0f;
+    e.supportMaxResidual = 0.0f;
 
-    for (Acts::SpacePointIndex2 isp = 0; isp < coreSpacePoints.size(); ++isp) {
-      if (isp == idx[0] || isp == idx[1] || isp == idx[2]) {
+    for (int extraLayer = 0; extraLayer < 4; ++extraLayer) {
+      if (layerUsed[extraLayer]) {
         continue;
       }
 
-      const auto sp = coreSpacePoints.at(isp);
-      const int layer = approxLayerFromZ(sp.zr()[0]);
-      if (layer != extraLayer) {
-        continue;
+      float bestResThisLayer = std::numeric_limits<float>::max();
+      bool found = false;
+
+      for (Acts::SpacePointIndex2 isp = 0; isp < coreSpacePoints.size(); ++isp) {
+        if (isp == idx[0] || isp == idx[1] || isp == idx[2]) {
+          continue;
+        }
+
+        const auto sp = coreSpacePoints.at(isp);
+        const int layer = approxLayerFromZ(sp.zr()[0]);
+        if (layer != extraLayer) {
+          continue;
+        }
+
+        const float res = pointResidualToLine(
+            e.line, sp.xy()[0], sp.xy()[1], sp.zr()[0]);
+
+        if (res < bestResThisLayer) {
+          bestResThisLayer = res;
+        }
+
+        if (res < supportResidualMax) {
+          found = true;
+        }
       }
 
-      const float res = pointResidualToLine(
-          e.line, sp.xy()[0], sp.xy()[1], sp.zr()[0]);
-
-      if (res < bestResThisLayer) {
-        bestResThisLayer = res;
-      }
-
-      if (res < supportResidualMax) {
-        found = true;
+      if (found) {
+        ++e.supportLayers;
+        ++e.supportPoints;
+        supportResidualSum += bestResThisLayer;
+        e.supportMaxResidual = std::max(e.supportMaxResidual, bestResThisLayer);
       }
     }
 
-    if (found) {
-      ++e.supportLayers;
-      ++e.supportPoints;
-      supportResidualSum += bestResThisLayer;
-      e.supportMaxResidual = std::max(e.supportMaxResidual, bestResThisLayer);
+    if (e.supportPoints > 0) {
+      e.supportAvgResidual = supportResidualSum / static_cast<float>(e.supportPoints);
+    } else {
+      e.supportAvgResidual = 1e9f;
+      e.supportMaxResidual = 1e9f;
     }
-  }
-
-  if (e.supportPoints > 0) {
-    e.supportAvgResidual = supportResidualSum / static_cast<float>(e.supportPoints);
   } else {
-    e.supportAvgResidual = 1e9f;
-    e.supportMaxResidual = 1e9f;
+    e.supportLayers = 0;
+    e.supportPoints = 0;
+    e.supportAvgResidual = 0.0f;
+    e.supportMaxResidual = 0.0f;
   }
 
   e.score =
@@ -451,10 +492,16 @@ StatusCode SeedingTool::initialize() {
          << "T, minPt=" << m_minPt
          << "GeV, helixCutTolerance=" << m_helixCutTolerance
          << ", straightLineCut=" << (m_enableStraightLineCut ? "ON" : "OFF")
+         << ", enableSeedLayerSelectionCut=" << (m_enableSeedLayerSelectionCut ? "ON" : "OFF")
+         << ", seedLayers=" << m_seedLayers
+         << ", allowReversedSeedLayers=" << (m_allowReversedSeedLayers ? "ON" : "OFF")
+         << ", enableCollinearityCut=" << (m_enableCollinearityCut ? "ON" : "OFF")
          << ", maxCollinearity=" << m_maxCollinearity
          << ", enableLayerOrderCut=" << (m_enableLayerOrderCut ? "ON" : "OFF")
          << ", preferContinuousTriplets=" << (m_preferContinuousTriplets ? "ON" : "OFF")
+         << ", enableTripletResidualCut=" << (m_enableTripletResidualCut ? "ON" : "OFF")
          << ", tripletResidualMax=" << m_tripletResidualMax
+         << ", enableFourthLayerSupportScoring=" << (m_enableFourthLayerSupportScoring ? "ON" : "OFF")
          << ", supportResidualMax=" << m_supportResidualMax
          << ", enableFamilyDuplicateSuppression="
          << (m_enableFamilyDuplicateSuppression ? "ON" : "OFF")
@@ -642,6 +689,9 @@ StatusCode SeedingTool::createSeeds(
         };
 
         SeedEval eval = evaluateSeed(coreSpacePoints, idxArr,
+                                     m_seedLayers.value(),
+                                     m_allowReversedSeedLayers.value(),
+                                     m_enableFourthLayerSupportScoring.value(),
                                      m_supportResidualMax.value(),
                                      m_supportLayerScoreWeight.value(),
                                      m_supportPointScoreWeight.value(),
@@ -650,6 +700,7 @@ StatusCode SeedingTool::createSeeds(
                                      m_tripletResidualPenalty.value(),
                                      m_collinearityPenalty.value(),
                                      m_preferContinuousTriplets.value());
+
         seedEvals[i] = eval;
 
         debug() << fmt::format(
@@ -658,8 +709,20 @@ StatusCode SeedingTool::createSeeds(
                 << endmsg;
         dumpSeedEval(debug(), eval, i, "      ");
 
-        // straight-line / collinearity cut
-        if (eval.col > m_maxCollinearity.value()) {
+        // 0) configured seed-layer selection cut
+        if (m_enableSeedLayerSelectionCut && !eval.matchesSeedLayerSelection) {
+          debug() << fmt::format(
+              "    reject seed[{}] in group[{}]: does not match configured seedLayers={}, layers=({}, {}, {})",
+              i, label, m_seedLayers.toString(),
+              eval.layers[0], eval.layers[1], eval.layers[2])
+                  << endmsg;
+          dumpSeed(debug(), coreSpacePoints, outSeeds[i], i, "      reject ");
+          outSeeds[i].quality() = -1.0f;
+          continue;
+        }
+
+        // 1) collinearity cut
+        if (m_enableCollinearityCut && eval.col > m_maxCollinearity.value()) {
           debug() << fmt::format(
               "    reject seed[{}] in group[{}]: collinearity={:.8g} > max={:.8g}",
               i, label, eval.col, m_maxCollinearity.value())
@@ -669,12 +732,11 @@ StatusCode SeedingTool::createSeeds(
           continue;
         }
 
-        // layer uniqueness + monotonic layer order
+        // 2) layer uniqueness + monotonic order
         if (m_enableLayerOrderCut &&
             (!eval.uniqueLayers || !eval.monotonicLayers)) {
           debug() << fmt::format(
-              "    reject seed[{}] in group[{}]: uniqueLayers={} monotonicLayers={} "
-              "layers=({}, {}, {})",
+              "    reject seed[{}] in group[{}]: uniqueLayers={} monotonicLayers={} layers=({}, {}, {})",
               i, label,
               eval.uniqueLayers ? 1 : 0,
               eval.monotonicLayers ? 1 : 0,
@@ -685,8 +747,9 @@ StatusCode SeedingTool::createSeeds(
           continue;
         }
 
-        // fitted-line residual sanity
-        if (!eval.line.valid || eval.tripletAvgResidual > m_tripletResidualMax.value()) {
+        // 3) fitted-line residual sanity
+        if (m_enableTripletResidualCut &&
+            (!eval.line.valid || eval.tripletAvgResidual > m_tripletResidualMax.value())) {
           debug() << fmt::format(
               "    reject seed[{}] in group[{}]: invalid line fit or tripletAvgResidual={:.6g} > max={:.6g}",
               i, label, eval.tripletAvgResidual, m_tripletResidualMax.value())
@@ -696,7 +759,7 @@ StatusCode SeedingTool::createSeeds(
           continue;
         }
 
-        // 4th-layer support scoring -> seed quality
+        // 4) score assignment
         outSeeds[i].quality() = eval.score;
 
         debug() << fmt::format(
@@ -718,7 +781,7 @@ StatusCode SeedingTool::createSeeds(
   }
 
   if (m_enableStraightLineCut) {
-    // seed family duplicate suppression
+    // 5) final family duplicate suppression
     if (m_enableFamilyDuplicateSuppression) {
       std::unordered_map<FamilyKey, std::size_t, FamilyKeyHash> bestSeedPerFamily;
 
