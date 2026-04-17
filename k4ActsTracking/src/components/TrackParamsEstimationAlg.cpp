@@ -11,6 +11,25 @@ StatusCode TrackParamsEstimationAlg::initialize() {
     error() << "Failed to retrieve TrackParamsEstimationTool" << endmsg;
     return StatusCode::FAILURE;
   }
+
+  m_inSP = k4FWCore::DataHandle<k4ActsTracking::SpacePointCollection>(
+      m_inSpacePointsName.value(), Gaudi::DataHandle::Reader, this);
+
+  m_inSeeds = k4FWCore::DataHandle<k4ActsTracking::SeedContainer>(
+      m_inSeedsName.value(), Gaudi::DataHandle::Reader, this);
+
+  m_inMeas = k4FWCore::DataHandle<k4ActsTracking::MeasurementCollection>(
+      m_inMeasurementsName.value(), Gaudi::DataHandle::Reader, this);
+
+  m_outParams =
+      k4FWCore::DataHandle<k4ActsTracking::InitialTrackParametersCollection>(
+          m_outInitialTrackParametersName.value(), Gaudi::DataHandle::Writer, this);
+
+  if (m_tool.retrieve().isFailure()) {
+    error() << "Failed to retrieve tool " << m_tool.typeAndName() << endmsg;
+    return StatusCode::FAILURE;
+  }  
+
   return StatusCode::SUCCESS;
 }
 

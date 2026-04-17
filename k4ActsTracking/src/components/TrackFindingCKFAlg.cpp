@@ -14,9 +14,29 @@ StatusCode TrackFindingCKFAlg::initialize() {
     return StatusCode::FAILURE;
   }
 
+  m_inInitialTrackParameters =
+      k4FWCore::DataHandle<k4ActsTracking::InitialTrackParametersCollection>(
+          m_inInitialTrackParametersName.value(), Gaudi::DataHandle::Reader, this);
+
+  m_inSourceLinks =
+      k4FWCore::DataHandle<k4ActsTracking::SourceLinkCollection>(
+          m_inSourceLinksName.value(), Gaudi::DataHandle::Reader, this);
+
+  m_inMeasurements =
+      k4FWCore::DataHandle<k4ActsTracking::MeasurementCollection>(
+          m_inMeasurementsName.value(), Gaudi::DataHandle::Reader, this);
+
+  m_outTracks =
+      k4FWCore::DataHandle<k4ActsTracking::ActsTrackContainerPtr>(
+          m_outTracksName.value(), Gaudi::DataHandle::Writer, this);
+
+  m_outTrackStates =
+      k4FWCore::DataHandle<k4ActsTracking::ActsTrackStateContainerPtr>(
+          m_outTrackStatesName.value(), Gaudi::DataHandle::Writer, this);
+
   if (m_tool.retrieve().isFailure()) {
-    error() << "Failed to retrieve track finding tool " << m_tool.typeAndName()
-            << endmsg;
+    error() << "Failed to retrieve track finding tool " 
+	    << m_tool.typeAndName() << endmsg;
     return StatusCode::FAILURE;
   }
 

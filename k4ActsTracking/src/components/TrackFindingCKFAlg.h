@@ -17,6 +17,26 @@ public:
   StatusCode execute(const EventContext& ctx) const override;
 
 private:
+  Gaudi::Property<std::string> m_inInitialTrackParametersName{
+      this, "InputInitialTrackParameters", "TrackerInitialTrackParameters",
+      "Input initial track parameters"};
+
+  Gaudi::Property<std::string> m_inSourceLinksName{
+      this, "InputSourceLinks", "TrackerSourceLinks",
+      "Input source links"};
+
+  Gaudi::Property<std::string> m_inMeasurementsName{
+      this, "InputMeasurements", "TrackerMeasurements",
+      "Input measurements"};
+
+  Gaudi::Property<std::string> m_outTracksName{
+      this, "OutputTracks", "ActsTracks",
+      "Output ACTS track container pointer"};
+
+  Gaudi::Property<std::string> m_outTrackStatesName{
+      this, "OutputTrackStates", "ActsTrackStates",
+      "Output ACTS track state container pointer"};
+
   mutable k4FWCore::DataHandle<k4ActsTracking::InitialTrackParametersCollection>
       m_inInitialTrackParameters{"TrackerInitialTrackParameters",
                                  Gaudi::DataHandle::Reader, this};

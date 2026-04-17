@@ -74,7 +74,7 @@ StatusCode TrackerEDMConverterTool::convert(const EventContext& /*ctx*/,
     auto newSp = outSP.sps.createSpacePoint();
 
     newSp.assignSourceLinks(std::array<Acts::SourceLink, 1>{
-        Acts::SourceLink(&outSL.back())
+        Acts::SourceLink(outSL.back())
     });
 
     // XY / ZR / Phi from hit global position

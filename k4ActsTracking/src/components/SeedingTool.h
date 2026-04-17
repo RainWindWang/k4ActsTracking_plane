@@ -11,8 +11,8 @@
 #include <Acts/Seeding2/DoubletSeedFinder.hpp>
 #include <Acts/Seeding2/TripletSeedFinder.hpp>
 #include <Acts/Utilities/Logger.hpp>
-#include <memory>
 
+#include <memory>
 
 class SeedingTool final : public extends<AlgTool, ISeedingTool> {
 public:
@@ -43,15 +43,19 @@ private:
   Gaudi::Property<float> m_deltaZMin{this, "deltaZMin", -5000.0f, "Min deltaZ [mm]"};
   Gaudi::Property<float> m_deltaZMax{this, "deltaZMax", +5000.0f, "Max deltaZ [mm]"};
 
-  Gaudi::Property<float> m_impactMax{this, "impactMax", 1000.0f, "Max impact parameter [mm] (loose)"};
-  Gaudi::Property<float> m_cotThetaMax{this, "cotThetaMax", 999.0f, "Max |cot(theta)| (loose)"};
-  Gaudi::Property<float> m_deltaPhiMax{this, "deltaPhiMax", 0.5f, "Max deltaPhi [rad]"};
+  Gaudi::Property<float> m_impactMax{
+      this, "impactMax", 1000.0f, "Max impact parameter [mm] (loose)"};
+  Gaudi::Property<float> m_cotThetaMax{
+      this, "cotThetaMax", 999.0f, "Max |cot(theta)| (loose)"};
+  Gaudi::Property<float> m_deltaPhiMax{
+      this, "deltaPhiMax", 0.5f, "Max deltaPhi [rad]"};
 
   // For B=0 tracker: disable pt/helix cuts by loosening; keep epsilon bField for numerics
   Gaudi::Property<float> m_bFieldInZ{
       this, "bFieldInZ", 1e-9f,
       "Numerical epsilon Bz [T] for helix-based formulas"};
-  Gaudi::Property<float> m_minPt{this, "minPt", 0.0f, "Min pT [GeV] (0 => no cut)"};
+  Gaudi::Property<float> m_minPt{
+      this, "minPt", 0.0f, "Min pT [GeV] (0 => no cut)"};
   Gaudi::Property<float> m_helixCutTolerance{
       this, "helixCutTolerance", 1e6f,
       "Huge => effectively disable helix cut"};
@@ -63,21 +67,78 @@ private:
   Gaudi::Property<float> m_deltaInvHelixDiameter{
       this, "deltaInvHelixDiameter", 1e6f,
       "Huge => disable curvature consistency"};
-  Gaudi::Property<float> m_compatSeedWeight{this, "compatSeedWeight", 0.0f, ""};
-  Gaudi::Property<float> m_impactWeightFactor{this, "impactWeightFactor", 0.0f, ""};
-  Gaudi::Property<float> m_zOriginWeightFactor{this, "zOriginWeightFactor", 0.0f, ""};
-  Gaudi::Property<unsigned int> m_maxSeedsPerSpM{this, "maxSeedsPerSpM", 50u, ""};
+  Gaudi::Property<float> m_compatSeedWeight{
+      this, "compatSeedWeight", 0.0f, ""};
+  Gaudi::Property<float> m_impactWeightFactor{
+      this, "impactWeightFactor", 0.0f, ""};
+  Gaudi::Property<float> m_zOriginWeightFactor{
+      this, "zOriginWeightFactor", 0.0f, ""};
+  Gaudi::Property<unsigned int> m_maxSeedsPerSpM{
+      this, "maxSeedsPerSpM", 50u, ""};
 
   // Optional: variable middle SP range
-  Gaudi::Property<bool> m_useVariableMiddleSPRange{this, "useVariableMiddleSPRange", false, ""};
+  Gaudi::Property<bool> m_useVariableMiddleSPRange{
+      this, "useVariableMiddleSPRange", false, ""};
   Gaudi::Property<float> m_rMinMiddle{this, "rMinMiddle", 0.0f, ""};
   Gaudi::Property<float> m_rMaxMiddle{this, "rMaxMiddle", 1e9f, ""};
 
   // Straight-line consistency cut (dominant for B=0 tracker)
-  Gaudi::Property<bool> m_enableStraightLineCut{this, "enableStraightLineCut", true, ""};
+  Gaudi::Property<bool> m_enableStraightLineCut{
+      this, "enableStraightLineCut", true, ""};
   Gaudi::Property<float> m_maxCollinearity{
       this, "maxCollinearity", 5e-3f,
       "Normalized cross-product magnitude threshold"};
+
+  // ---------------------------------------------------------------------------
+  // LUXE straight-line seeding optimization
+  // ---------------------------------------------------------------------------
+
+  // layer uniqueness + monotonic order
+  Gaudi::Property<bool> m_enableLayerOrderCut{
+      this, "enableLayerOrderCut", true,
+      "Require unique layers and strictly monotonic layer order"};
+  Gaudi::Property<bool> m_preferContinuousTriplets{
+      this, "preferContinuousTriplets", true,
+      "Prefer continuous-layer triplets (e.g. 0-1-2 / 1-2-3) in ranking"};
+
+  // fitted-line residual sanity and 4th-layer support
+  Gaudi::Property<float> m_tripletResidualMax{
+      this, "tripletResidualMax", 0.50f,
+      "Max average residual [mm] of the 3-point fitted straight line"};
+  Gaudi::Property<float> m_supportResidualMax{
+      this, "supportResidualMax", 0.80f,
+      "Residual threshold [mm] for counting an extra-layer support point"};
+
+  // quality / scoring weights
+  Gaudi::Property<float> m_supportLayerScoreWeight{
+      this, "supportLayerScoreWeight", 1000.0f,
+      "Score weight per extra supported layer"};
+  Gaudi::Property<float> m_supportPointScoreWeight{
+      this, "supportPointScoreWeight", 100.0f,
+      "Score weight per extra compatible support point"};
+  Gaudi::Property<float> m_continuousTripletBonus{
+      this, "continuousTripletBonus", 10.0f,
+      "Bonus added to quality for continuous-layer triplets"};
+  Gaudi::Property<float> m_supportResidualPenalty{
+      this, "supportResidualPenalty", 50.0f,
+      "Penalty coefficient for support average residual"};
+  Gaudi::Property<float> m_tripletResidualPenalty{
+      this, "tripletResidualPenalty", 10.0f,
+      "Penalty coefficient for triplet average residual"};
+  Gaudi::Property<float> m_collinearityPenalty{
+      this, "collinearityPenalty", 1.0f,
+      "Penalty coefficient for collinearity in seed score"};
+
+  // duplicate suppression
+  Gaudi::Property<bool> m_enableFamilyDuplicateSuppression{
+      this, "enableFamilyDuplicateSuppression", true,
+      "Enable seed family duplicate suppression after seed scoring"};
+  Gaudi::Property<float> m_familySlopeBin{
+      this, "familySlopeBin", 5.0e-4f,
+      "Quantization bin for fitted line slopes ax/ay in family key"};
+  Gaudi::Property<float> m_familyInterceptBin{
+      this, "familyInterceptBin", 2.0f,
+      "Quantization bin [mm] for fitted line intercepts bx/by in family key"};
 
   // Internal ACTS objects
   mutable Acts::BroadTripletSeedFilter::Config m_filterCfg{};
