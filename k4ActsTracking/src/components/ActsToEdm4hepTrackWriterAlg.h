@@ -1,16 +1,14 @@
 #pragma once
 
 #include "k4ActsTracking/ActsDataContainers.h"
+#include "k4ActsTracking/IActsToEdm4hepTrackWriterTool.h"
 
 #include <GaudiKernel/Algorithm.h>
 #include <GaudiKernel/ToolHandle.h>
 
 #include <edm4hep/TrackCollection.h>
-#include <edm4hep/TrackStateCollection.h>
 
 #include <k4FWCore/DataHandle.h>
-
-class ActsToEdm4hepTrackWriterTool;
 
 class ActsToEdm4hepTrackWriterAlg final : public Gaudi::Algorithm {
 public:
@@ -20,19 +18,28 @@ public:
   StatusCode execute(const EventContext& ctx) const override;
 
 private:
-  k4FWCore::DataHandle<k4ActsTracking::ActsTrackContainerPtr> m_inTracks{
-      "FittedActsTracks", Gaudi::DataHandle::Reader, this};
+  Gaudi::Property<std::string> m_inTracksName{
+      this, "InputTracks", "ActsTracks",
+      "Input ACTS track container pointer"};
 
-  k4FWCore::DataHandle<k4ActsTracking::ActsTrackStateContainerPtr> m_inTrackStates{
-      "FittedActsTrackStates", Gaudi::DataHandle::Reader, this};
+  Gaudi::Property<std::string> m_inTrackStatesName{
+      this, "InputTrackStates", "ActsTrackStates",
+      "Input ACTS track-state container pointer"};
 
-  k4FWCore::DataHandle<edm4hep::TrackCollection> m_outTracks{
+  Gaudi::Property<std::string> m_outTracksName{
+      this, "OutputTracks", "ReconstructedTracks",
+      "Output edm4hep track collection"};
+
+  mutable k4FWCore::DataHandle<k4ActsTracking::ActsTrackContainerPtr> m_inTracks{
+      "ActsTracks", Gaudi::DataHandle::Reader, this};
+
+  mutable k4FWCore::DataHandle<k4ActsTracking::ActsTrackStateContainerPtr>
+      m_inTrackStates{"ActsTrackStates", Gaudi::DataHandle::Reader, this};
+
+  mutable k4FWCore::DataHandle<edm4hep::TrackCollection> m_outTracks{
       "ReconstructedTracks", Gaudi::DataHandle::Writer, this};
 
-  k4FWCore::DataHandle<edm4hep::TrackStateCollection> m_outTrackStates{
-      "ReconstructedTrackStates", Gaudi::DataHandle::Writer, this};
-
-  ToolHandle<ActsToEdm4hepTrackWriterTool> m_tool{
+  mutable ToolHandle<IActsToEdm4hepTrackWriterTool> m_tool{
       this, "Tool",
       "ActsToEdm4hepTrackWriterTool/ActsToEdm4hepTrackWriterTool"};
 };

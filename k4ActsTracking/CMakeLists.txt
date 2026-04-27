@@ -69,8 +69,8 @@ set(_plugin_sources
   #src/components/TrackFittingAlg.cpp
   #src/components/TrackFittingTool.cpp
 
-  #src/components/ActsToEdm4hepTrackWriterAlg.cpp
-  #src/components/ActsToEdm4hepTrackWriterTool.cpp
+  src/components/ActsToEdm4hepTrackWriterAlg.cpp
+  src/components/ActsToEdm4hepTrackWriterTool.cpp
 )
 
 set(ACTS_PLUGIN_TARGETS "Acts::Core;Acts::PluginDD4hep")

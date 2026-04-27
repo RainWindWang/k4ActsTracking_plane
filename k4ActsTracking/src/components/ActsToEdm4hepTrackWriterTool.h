@@ -1,18 +1,16 @@
 #pragma once
 
-#include "k4ActsTracking/ActsDataContainers.h"
+#include "k4ActsTracking/IActsToEdm4hepTrackWriterTool.h"
 
+#include <Gaudi/Property.h>
 #include <GaudiKernel/AlgTool.h>
 
 #include <Acts/Utilities/Logger.hpp>
 
-#include <edm4hep/TrackCollection.h>
-#include <edm4hep/TrackStateCollection.h>
-
 #include <memory>
 
 class ActsToEdm4hepTrackWriterTool final
-    : public extends<GaudiTool, IAlgTool> {
+    : public extends<AlgTool, IActsToEdm4hepTrackWriterTool> {
 public:
   ActsToEdm4hepTrackWriterTool(const std::string& type,
                                const std::string& name,
@@ -20,12 +18,15 @@ public:
 
   StatusCode initialize() override;
 
-  StatusCode write(
-      const k4ActsTracking::ActsTrackContainerPtr& inTracks,
-      const k4ActsTracking::ActsTrackStateContainerPtr& inTrackStates,
-      edm4hep::TrackCollection& outTracks,
-      edm4hep::TrackStateCollection& outTrackStates) const;
+  StatusCode writeTracks(
+      const k4ActsTracking::ActsTrackContainerPtr& tracks,
+      const k4ActsTracking::ActsTrackStateContainerPtr& trackStates,
+      edm4hep::TrackCollection& outTracks) const override;
 
 private:
+  Gaudi::Property<bool> m_dumpSummary{
+      this, "DumpSummary", true,
+      "Print summary of ACTS to edm4hep track conversion"};
+
   std::unique_ptr<const Acts::Logger> m_logger;
 };

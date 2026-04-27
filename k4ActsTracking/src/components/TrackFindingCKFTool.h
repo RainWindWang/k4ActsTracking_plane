@@ -65,5 +65,13 @@ private:
       this, "TrimTracks", true,
       "Trim trailing / leading states before finalizing tracks"};
 
+  Gaudi::Property<bool> m_dumpInitialParameters{
+      this, "DumpInitialParameters", true,
+      "Print a summary for each input initial parameter"};
+
+  Gaudi::Property<bool> m_dumpTrackSummary{
+      this, "DumpTrackSummary", true,
+      "Print a summary for each found CKF candidate track"};
+
   std::unique_ptr<const Acts::Logger> m_logger;
 };

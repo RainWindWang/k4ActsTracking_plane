@@ -5,6 +5,7 @@
 #include <Acts/EventData/ProxyAccessor.hpp>
 #include <Acts/EventData/SourceLink.hpp>
 #include <Acts/EventData/TrackContainer.hpp>
+#include <Acts/EventData/TrackParameters.hpp>
 #include <Acts/EventData/VectorMultiTrajectory.hpp>
 #include <Acts/EventData/VectorTrackContainer.hpp>
 #include <Acts/Geometry/GeometryIdentifier.hpp>
@@ -20,7 +21,9 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <iomanip>
 #include <memory>
+#include <sstream>
 #include <utility>
 #include <vector>
 
@@ -33,6 +36,7 @@ using TrackContainerBackend = k4ActsTracking::ActsTrackContainer;
 using MutableTrackContainer =
     Acts::TrackContainer<TrackContainerBackend, TrackStateBackend,
                          std::shared_ptr>;
+
 class PreparedSourceLinkAccessor {
 public:
   using Container = std::vector<Acts::SourceLink>;
@@ -135,6 +139,23 @@ private:
   Acts::MeasurementSelector m_selector;
 };
 
+std::string formatBoundTrackParameters(
+    const Acts::BoundTrackParameters& params) {
+  std::ostringstream os;
+  const auto& p = params.parameters();
+
+  os << std::fixed << std::setprecision(6)
+     << "loc0=" << p[Acts::eBoundLoc0]
+     << ", loc1=" << p[Acts::eBoundLoc1]
+     << ", phi=" << p[Acts::eBoundPhi]
+     << ", theta=" << p[Acts::eBoundTheta]
+     << ", qOverP=" << p[Acts::eBoundQOverP]
+     << ", time=" << p[Acts::eBoundTime]
+     << ", refGeoId=" << params.referenceSurface().geometryId();
+
+  return os.str();
+}
+
 }  // namespace
 
 TrackFindingCKFTool::TrackFindingCKFTool(const std::string& type,
@@ -154,6 +175,9 @@ StatusCode TrackFindingCKFTool::initialize() {
          << ", NumMeasurementsCutOff=" << m_numMeasurementsCutOff
          << ", MaxSteps=" << m_maxSteps
          << ", ReverseSearch=" << (m_reverseSearch ? "true" : "false")
+         << ", DumpInitialParameters="
+         << (m_dumpInitialParameters ? "true" : "false")
+         << ", DumpTrackSummary=" << (m_dumpTrackSummary ? "true" : "false")
          << endmsg;
 
   return StatusCode::SUCCESS;
@@ -270,8 +294,14 @@ StatusCode TrackFindingCKFTool::findTracks(
 
   std::size_t nFound = 0;
   std::size_t nFailed = 0;
+  std::size_t iSeed = 0;
 
   for (const auto& initialParams : initialParameters) {
+    if (m_dumpInitialParameters) {
+      debug() << "CKF input initialParams[" << iSeed << "]: "
+              << formatBoundTrackParameters(initialParams) << endmsg;
+    }
+
     tempTracks.clear();
 
     auto rootBranch = tempTracks.makeTrack();
@@ -280,21 +310,43 @@ StatusCode TrackFindingCKFTool::findTracks(
 
     if (!result.ok()) {
       ++nFailed;
-      warning() << "CKF failed for one initial parameter with error "
-                << result.error() << endmsg;
+      warning() << "CKF failed for initialParams[" << iSeed
+                << "] with error " << result.error() << endmsg;
+      ++iSeed;
       continue;
     }
 
+    std::size_t iCand = 0;
     for (auto& track : result.value()) {
       if (m_trimTracks) {
         Acts::trimTrack(track, true, true, true, true);
       }
       Acts::calculateTrackQuantities(track);
 
+      if (m_dumpTrackSummary) {
+        debug() << "CKF candidate from initialParams[" << iSeed
+                << "] cand[" << iCand << "]: "
+                << "nStates=" << track.nTrackStates()
+                << ", nMeasurements=" << track.nMeasurements()
+                << ", nHoles=" << track.nHoles()
+                << ", nOutliers=" << track.nOutliers()
+                << ", hasReferenceSurface="
+                << (track.hasReferenceSurface() ? "true" : "false")
+                << endmsg;
+
+        if (track.hasReferenceSurface()) {
+          debug() << "  candidate reference surface geoId="
+                  << track.referenceSurface().geometryId() << endmsg;
+        }
+      }
+
       auto dest = finalTracks.makeTrack();
       dest.copyFrom(track);
       ++nFound;
+      ++iCand;
     }
+
+    ++iSeed;
   }
 
   debug() << "Track finding finished: found=" << nFound
